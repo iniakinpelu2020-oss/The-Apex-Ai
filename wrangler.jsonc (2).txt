@@ -1,0 +1,8 @@
+{
+  "name": "apex-proxy",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "ai": { "binding": "AI" },
+  "observability": { "enabled": true },
+  "vars": { "FIREBASE_API_KEY": "AIzaSyAXSWi7f3tCMF_2cimrjnLo9j8BZb7Ckr0" }
+}
