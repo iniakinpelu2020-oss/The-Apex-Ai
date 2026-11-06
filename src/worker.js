@@ -413,7 +413,6 @@ async function backupChain(env, messages, max_tokens, cfErr, temp) {
   throw new Error(errors.join(" | "));
 }
 
-const stripThink = (t) =>
   const stripThink = (t) =>
   String(t || "").replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/<think>[\s\S]*$/i, "");
 
