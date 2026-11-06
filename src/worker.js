@@ -457,7 +457,7 @@ async function backupChain(env, messages, max_tokens, cfErr, temp) {
 }
 
 const stripThink = (t) =>
-  String(t || "").replace(/ thinking[\s\S]*?<\/think>/gi, "").replace(/ thinking[\s\S]*$/i, "");
+  String(t || "").replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/<think>[\s\S]*$/i, "");
 
 const scrub = (t) =>
   String(t || "")
