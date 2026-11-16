@@ -223,7 +223,11 @@
 
                 <form id="chatForm" onsubmit="handleChatSubmit(event)" class="flex gap-3 items-end">
                     <div class="flex-1 bg-apexPanel/95 backdrop-blur-md border-2 border-violet-500/60 hover:border-violet-500 rounded-2xl p-3.5 focus-within:border-cyan-400 transition-all shadow-2xl flex items-center gap-3">
-                        <input type="file" id="deviceFileInput" onchange="handleFileSelected(event)" class="hidden" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.txt,.js,.py,.html,.css,.json,.csv,.md">
+<<<<<<< HEAD
+                        <input type="file" id="deviceFileInput" onchange="handleFileSelected(event)" class="hidden" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.png,.jpg,.jpeg,.webp,.pdf,.txt,.js,.py,.html,.css,.json,.csv,.md">
+=======
+                        <input type="file" id="deviceFileInput" onchange="handleFileSelected(event)" class="hidden" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.png,.jpg,.jpeg,.webp,.pdf,.txt,.js,.py,.html,.css,.json,.csv,.md">
+>>>>>>> bd4c6ec (Allow image and PDF uploads without legacy type restriction)
 
                         <button type="button" onclick="document.getElementById('deviceFileInput').click()" class="p-2 text-slate-300 hover:text-cyan-400 rounded-xl hover:bg-slate-900 transition-colors flex-shrink-0" title="Upload from Device">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
@@ -921,8 +925,9 @@ const USER_IDENTITY_PROMPT = {
             const files = Array.from(e.target.files || []);
             e.target.value = '';
             for (const file of files) {
-                const isImage = file.type.startsWith("image/") && ["image/png", "image/jpeg", "image/webp"].includes(file.type);
-                const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+                const lowerName = String(file.name || "").toLowerCase();
+                const isImage = ["image/png", "image/jpeg", "image/webp"].includes(file.type) || /\.(png|jpe?g|webp)$/i.test(lowerName);
+                const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(lowerName);
 
                 if (isImage) {
                     if (file.size > 8 * 1024 * 1024) {
@@ -954,7 +959,7 @@ const USER_IDENTITY_PROMPT = {
                 reader.onload = (evt) => {
                     const text = String(evt.target.result || "");
                     if (/\u0000/.test(text)) {
-                        showModal("Unsupported File", file.name + " looks like a binary file. Please upload a supported text/code file.");
+                        showModal("Unsupported File", file.name + " looks like a binary file. Please upload a supported image, PDF, or text/code file.");
                         return;
                     }
                     attachedFiles.push({ type: "text", name: file.name, content: text });
