@@ -25,15 +25,18 @@ const VISION_MODELS = new Set([
   "meta/llama-3.2-90b-vision-instruct",
   "@cf/meta/llama-3.2-90b-vision-instruct",
   "@cf/meta/llama-3.2-11b-vision-instruct",
+  "@cf/meta/llama-4-scout-17b-16e-instruct",
+  "meta/llama-4-scout-17b-16e-instruct",
   "mistral-small-latest",
   "pixtral-large-latest",
+  "qwen/qwen3.8-27b",
 ]);
 const isVision = (m) =>
   VISION_MODELS.has(m) || VISION_MODELS.has(String(m || "").replace(/^@cf\//, ""));
 
-const VISION_PRIMARY = "@cf/meta/llama-3.2-90b-vision-instruct";
+const VISION_PRIMARY_CF = "@cf/meta/llama-4-scout-17b-16e-instruct";
 const CHAIN_EXCLUDE = new Set();
-const ALLOWED_MODELS = [...CF_MODELS, VISION_PRIMARY];
+const ALLOWED_MODELS = [...CF_MODELS, VISION_PRIMARY_CF];
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -139,7 +142,10 @@ function textOf(content) {
 
 function imagesOf(content) {
   if (!Array.isArray(content)) return [];
-  return content.filter((p) => p && p.type === "image_url" && p.image_url).slice(0, 2);
+  return content
+    .filter((p) => p && p.type === "image_url" && p.image_url && p.image_url.url)
+    .slice(0, 4)
+    .map((p) => ({ type: "image_url", image_url: { url: String(p.image_url.url) } }));
 }
 
 function cleanUserText(raw) {
@@ -332,19 +338,21 @@ const EXTERNAL_PROVIDERS = [
   { name: "NVIDIA", url: "https://integrate.api.nvidia.com/v1/chat/completions", key: "NVIDIA_API_KEY", model: "meta/llama-3.1-70b-instruct" },
 ];
 
-function toModelMessages(messages, model) {
-  const vision = isVision(model);
+function toModelMessages(messages, model, forceVision = false) {
+  const vision = forceVision || isVision(model);
   return messages.map((m) => {
     if (vision && m.images && m.images.length) {
-      return { role: m.role, content: [...m.images, { type: "text", text: m.content }] };
+      const text = (m.content && String(m.content).trim()) ? String(m.content) : "Analyze this image.";
+      return { role: m.role, content: [{ type: "text", text }, ...m.images] };
     }
-    return { role: m.role, content: m.content };
+    if (m.role === "assistant") return { role: "assistant", content: String(m.content || "") };
+    return { role: m.role, content: String(m.content || "") };
   });
 }
 
-function cleanedProviderMessages(messages) {
+function cleanedProviderMessages(messages, model, forceVision = false) {
   const body = (messages || []).filter((m) => m && m.role !== "system");
-  return [{ role: "system", content: APEX_SYSTEM_PROMPT }, ...toModelMessages(body, null)];
+  return [{ role: "system", content: APEX_SYSTEM_PROMPT }, ...toModelMessages(body, model, forceVision)];
 }
 
 function isProviderRefusal(text) {
@@ -360,18 +368,20 @@ function isProviderRefusal(text) {
   );
 }
 
-async function callExternalProvider(env, provider, messages, max_tokens, temp) {
+async function callExternalProvider(env, provider, messages, max_tokens, temp, opts = {}) {
   if (!env[provider.key]) throw new Error(`${provider.name}: missing API key`);
+  const model = opts.model || provider.model;
+  const forceVision = !!opts.forceVision;
   const body = {
-    model: provider.model,
-    messages: cleanedProviderMessages(messages),
+    model,
+    messages: cleanedProviderMessages(messages, model, forceVision),
     max_tokens: Math.min(max_tokens, 2048),
     temperature: typeof temp === "number" ? temp : 0.7,
     top_p: 0.95,
   };
   if (provider.name === "Mistral") body.safe_prompt = false;
 
-  const r = await postJson(provider.url, { Authorization: `Bearer ${env[provider.key]}` }, body, 25000);
+  const r = await postJson(provider.url, { Authorization: `Bearer ${env[provider.key]}` }, body, 30000);
   if (!r.ok) throw new Error(`${provider.name} ${r.status}: ${(await r.text()).slice(0, 120)}`);
   const j = await r.json();
   const text = j?.choices?.[0]?.message?.content ?? "";
@@ -379,10 +389,11 @@ async function callExternalProvider(env, provider, messages, max_tokens, temp) {
   return { text: String(text), truncated: j?.choices?.[0]?.finish_reason === "length" };
 }
 
-async function callCloudflare(env, model, messages, max_tokens, temp) {
-  const id = ALLOWED_MODELS.includes(model) ? model : AI_MODEL;
-  const payload = cleanedProviderMessages(messages);
-  if (id.includes("qwen3")) {
+async function callCloudflare(env, model, messages, max_tokens, temp, opts = {}) {
+  const id = model || (ALLOWED_MODELS.includes(opts.requestedModel) ? opts.requestedModel : AI_MODEL);
+  const forceVision = !!opts.forceVision || isVision(id);
+  const payload = cleanedProviderMessages(messages, id, forceVision);
+  if (id.includes("qwen3") && !forceVision) {
     const last = payload.length - 1;
     if (last >= 0 && payload[last].role === "user" && typeof payload[last].content === "string") {
       payload[last] = { ...payload[last], content: payload[last].content + " /no_think" };
@@ -408,32 +419,33 @@ async function callCloudflare(env, model, messages, max_tokens, temp) {
   }
 }
 
-async function failoverAfterRefusal(env, messages, max_tokens, temp, errors) {
+async function failoverAfterRefusal(env, messages, max_tokens, temp, errors, opts = {}) {
   const nvidia = EXTERNAL_PROVIDERS.find((p) => p.name === "NVIDIA");
-  if (nvidia && env[nvidia.key]) {
+  if (nvidia && env[nvidia.key] && !opts.forceVision) {
     try {
-      return await callExternalProvider(env, nvidia, messages, max_tokens, temp);
+      return await callExternalProvider(env, nvidia, messages, max_tokens, temp, opts);
     } catch (e) {
       errors.push(String((e && e.message) || e));
     }
   }
   try {
-    return await callCloudflare(env, AI_MODEL, messages, max_tokens, temp);
+    return await callCloudflare(env, opts.cfModel || AI_MODEL, messages, max_tokens, temp, opts);
   } catch (e) {
     errors.push(String((e && e.message) || e));
   }
   throw new Error(errors.join(" | "));
 }
 
-async function backupChain(env, messages, max_tokens, cfErr, temp) {
+async function backupChain(env, messages, max_tokens, cfErr, temp, opts = {}) {
   const errors = [`Cloudflare: ${(cfErr && cfErr.message) || cfErr}`];
+  const providers = opts.providers || EXTERNAL_PROVIDERS;
 
-  for (const provider of EXTERNAL_PROVIDERS) {
+  for (const provider of providers) {
     try {
-      const out = await callExternalProvider(env, provider, messages, max_tokens, temp);
+      const out = await callExternalProvider(env, provider, messages, max_tokens, temp, opts.providerOpts?.[provider.name] || opts);
       if ((provider.name === "Groq" || provider.name === "Mistral") && isProviderRefusal(out.text)) {
         errors.push(`${provider.name}: refusal detected`);
-        return await failoverAfterRefusal(env, messages, max_tokens, temp, errors);
+        return await failoverAfterRefusal(env, messages, max_tokens, temp, errors, opts);
       }
       return out;
     } catch (e) {
@@ -450,10 +462,41 @@ const scrub = (t) => String(t || "").replace(/\n{3,}/g, "\n\n").trim();
 
 const isRefusal = (t) => isProviderRefusal(t);
 
-async function generateOnce(env, model, messages, max_tokens, temp, viaApi) {
-  const wrapped = [{ role: "system", content: APEX_SYSTEM_PROMPT, images: [] }, ...messages.filter((m) => m.role !== "system")];
+function messagesHaveImages(messages) {
+  return (messages || []).some((m) => m && m.role === "user" && Array.isArray(m.images) && m.images.length > 0);
+}
 
-  if (viaApi) {
+async function generateOnce(env, model, messages, max_tokens, temp, opts = {}) {
+  const wrapped = [{ role: "system", content: APEX_SYSTEM_PROMPT, images: [] }, ...messages.filter((m) => m && m.role !== "system")];
+  const hasImages = messagesHaveImages(wrapped);
+
+  if (hasImages) {
+    const errors = [];
+    const visionGroq = { name: "Groq", url: "https://api.groq.com/openai/v1/chat/completions", key: "GROQ_API_KEY", model: "qwen/qwen3.8-27b" };
+    const visionMistral = { name: "Mistral", url: "https://api.mistral.ai/v1/chat/completions", key: "MISTRAL_API_KEY", model: "mistral-small-latest" };
+    const visionOpts = { forceVision: true, cfModel: VISION_PRIMARY_CF };
+    for (const provider of [visionGroq, visionMistral]) {
+      if (!env[provider.key]) continue;
+      try {
+        const out = await callExternalProvider(env, provider, wrapped, max_tokens, temp, { ...visionOpts, model: provider.model });
+        if (isProviderRefusal(out.text)) {
+          errors.push(`${provider.name}: refusal detected`);
+          return await failoverAfterRefusal(env, wrapped, max_tokens, temp, errors, visionOpts);
+        }
+        return out;
+      } catch (e) {
+        errors.push(String((e && e.message) || e));
+      }
+    }
+    try {
+      return await callCloudflare(env, VISION_PRIMARY_CF, wrapped, max_tokens, temp, visionOpts);
+    } catch (e) {
+      errors.push(String((e && e.message) || e));
+      throw new Error(errors.join(" | "));
+    }
+  }
+
+  if (opts.viaApi) {
     const errors = ["Cloudflare: bypassed"];
     for (const provider of EXTERNAL_PROVIDERS) {
       try {
@@ -471,24 +514,24 @@ async function generateOnce(env, model, messages, max_tokens, temp, viaApi) {
   }
 
   try {
-    const out = await callCloudflare(env, model, wrapped, max_tokens, temp);
+    const out = await callCloudflare(env, model, wrapped, max_tokens, temp, { requestedModel: model });
     return out;
   } catch (cfErr) {
     return await backupChain(env, wrapped, max_tokens, cfErr, temp);
   }
 }
 
-async function generateFull(env, model, messages, max_tokens, temp, viaApi) {
-  let { text, truncated } = await generateOnce(env, model, messages, max_tokens, temp, viaApi);
+async function generateFull(env, model, messages, max_tokens, temp, opts = {}) {
+  let { text, truncated } = await generateOnce(env, model, messages, max_tokens, temp, opts);
   let full = stripThink(text);
-  for (let i = 0; i < 2 && truncated && full.trim(); i++) {
+  for (let i = 0; i < 1 && truncated && full.trim(); i++) {
     let next = null;
     try {
       next = await generateOnce(env, model, [
         ...messages,
         { role: "assistant", content: full, images: [] },
         { role: "user", content: "Continue exactly where you stopped. Do not repeat anything and do not add an introduction.", images: [] },
-      ], max_tokens, temp, viaApi);
+      ], max_tokens, temp, opts);
     } catch {
       break;
     }
@@ -500,13 +543,13 @@ async function generateFull(env, model, messages, max_tokens, temp, viaApi) {
   return scrub(full);
 }
 
-async function answerWith(env, model, messages, max_tokens, viaApi) {
-  const first = await generateFull(env, model, messages, max_tokens, 0.7, viaApi);
+async function answerWith(env, model, messages, max_tokens, opts = {}) {
+  const first = await generateFull(env, model, messages, max_tokens, 0.7, opts);
   if (!isRefusal(first)) return { text: first, clean: true };
 
   let best = first;
   for (let i = 0; i < MAX_RETRIES; i++) {
-    const retry = await generateFull(env, model, messages, max_tokens, 0.7, viaApi);
+    const retry = await generateFull(env, model, messages, max_tokens, 0.7, opts);
     if (!isRefusal(retry)) return { text: retry, clean: true };
     if (retry.length > best.length) best = retry;
   }
@@ -624,10 +667,10 @@ const handler = {
     let fallback = "";
     let lastErr = null;
 
-    const runOne = async (model, viaApi) => {
+    const runOne = async (model, opts = {}) => {
       if (Date.now() - started > TOTAL_DEADLINE_MS) return true;
       try {
-        const r = await answerWith(env, model, messages, max_tokens, viaApi);
+        const r = await answerWith(env, model, messages, max_tokens, opts);
         if (r.clean && r.text) { content = r.text; return true; }
         if (r.text && r.text.length > fallback.length) fallback = r.text;
       } catch (err) {
@@ -637,16 +680,12 @@ const handler = {
     };
 
     if (hasImages) {
-      const apiDone = await runOne(VISION_PRIMARY, true);
-      if (!apiDone && !content) {
-        for (const m of [VISION_PRIMARY, ...CF_MODELS]) {
-          if (await runOne(m, false)) break;
-        }
-      }
+      // Image requests: primary vision via Groq/Mistral with refusal failover, fallback to Cloudflare Workers AI vision.
+      await runOne(VISION_PRIMARY_CF, {});
     } else {
       const primary = CF_MODELS.includes(payload.model) ? payload.model : AI_MODEL;
       for (const m of [primary, ...CF_MODELS.filter((x) => x !== primary && !CHAIN_EXCLUDE.has(x))]) {
-        if (await runOne(m, false)) break;
+        if (await runOne(m, {})) break;
       }
     }
 

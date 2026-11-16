@@ -1,0 +1,25 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "Clean, responsive HTML5 and CSS3 web layouts and components. # Front-End Web Projects",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iniakinpelu2020-oss/The-Apex-Ai.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/iniakinpelu2020-oss/The-Apex-Ai/issues"
+  },
+  "homepage": "https://github.com/iniakinpelu2020-oss/The-Apex-Ai#readme",
+  "dependencies": {
+    "pdfjs-dist": "^6.5.438"
+  },
+  "private": true
+}

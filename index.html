@@ -31,6 +31,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.1/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.js"></script>
+    <script>
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js";
+        }
+    </script>
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #05070e; color: #f3f4f6; }
         code, pre { font-family: 'JetBrains Mono', monospace; }
@@ -217,7 +223,7 @@
 
                 <form id="chatForm" onsubmit="handleChatSubmit(event)" class="flex gap-3 items-end">
                     <div class="flex-1 bg-apexPanel/95 backdrop-blur-md border-2 border-violet-500/60 hover:border-violet-500 rounded-2xl p-3.5 focus-within:border-cyan-400 transition-all shadow-2xl flex items-center gap-3">
-                        <input type="file" id="deviceFileInput" onchange="handleFileSelected(event)" class="hidden" multiple accept="image/*,.txt,.js,.py,.html,.css,.json,.csv,.md">
+                        <input type="file" id="deviceFileInput" onchange="handleFileSelected(event)" class="hidden" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.txt,.js,.py,.html,.css,.json,.csv,.md">
 
                         <button type="button" onclick="document.getElementById('deviceFileInput').click()" class="p-2 text-slate-300 hover:text-cyan-400 rounded-xl hover:bg-slate-900 transition-colors flex-shrink-0" title="Upload from Device">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
@@ -897,43 +903,65 @@ const USER_IDENTITY_PROMPT = {
             } catch (err) { showModal("Export Error", "Unable to download file directly."); }
         }
 
-        function handleFileSelected(e) {
-            const files = e.target.files;
-            if (!files) return;
-            for (let file of files) {
-                if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-                    showModal("Unsupported File Type", "Images and PDFs are not supported for upload. Please upload text or code files.");
+        async function extractPdfText(file) {
+            if (!window.pdfjsLib) throw new Error("PDF support is unavailable.");
+            const data = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data }).promise;
+            const pages = [];
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                const text = (content.items || []).map((it) => it.str || "").join(" ").replace(/\s+/g, " ").trim();
+                if (text) pages.push(`[Page ${i}]\n${text}`);
+            }
+            return pages.join("\n\n").trim();
+        }
+
+        async function handleFileSelected(e) {
+            const files = Array.from(e.target.files || []);
+            e.target.value = '';
+            for (const file of files) {
+                const isImage = file.type.startsWith("image/") && ["image/png", "image/jpeg", "image/webp"].includes(file.type);
+                const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+
+                if (isImage) {
+                    if (file.size > 8 * 1024 * 1024) {
+                        showModal("Image Too Large", file.name + " is over 8MB. Please use a smaller image.");
+                        continue;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        attachedFiles.push({ type: "image", name: file.name, dataUrl: evt.target.result });
+                        renderFilePreviews();
+                    };
+                    reader.readAsDataURL(file);
                     continue;
                 }
+
+                if (isPdf) {
+                    try {
+                        const extractedText = await extractPdfText(file);
+                        const content = `--- Attached PDF: ${file.name} ---\n${extractedText || "[No extractable text found in this PDF.]"}`;
+                        attachedFiles.push({ type: "text", name: file.name, content });
+                        renderFilePreviews();
+                    } catch (err) {
+                        showModal("PDF Error", "Could not extract text from " + file.name + ".");
+                    }
+                    continue;
+                }
+
                 const reader = new FileReader();
-                if (file.type === 'application/pdf') {
-    showModal("Unsupported File Type", "PDFs are not supported yet. Please upload an image or text/code file.");
-    continue;
-}
-if (file.type.startsWith('image/')) {
-    if (file.size > 4 * 1024 * 1024) {
-        showModal("Image Too Large", file.name + " is over 4MB. Please use a smaller image.");
-        continue;
-    }
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-        attachedFiles.push({ name: file.name, type: file.type, isImage: true, content: evt.target.result });
-        renderFilePreviews();
-    };
-    reader.readAsDataURL(file);
-    continue;
-}
                 reader.onload = (evt) => {
-                    if (/\u0000/.test(evt.target.result)) {
-                        showModal("Unsupported File", file.name + " looks like a binary file. Please upload text or code files.");
+                    const text = String(evt.target.result || "");
+                    if (/\u0000/.test(text)) {
+                        showModal("Unsupported File", file.name + " looks like a binary file. Please upload a supported text/code file.");
                         return;
                     }
-                    attachedFiles.push({ name: file.name, type: file.type, content: evt.target.result });
+                    attachedFiles.push({ type: "text", name: file.name, content: text });
                     renderFilePreviews();
                 };
                 reader.readAsText(file);
             }
-            e.target.value = '';
         }
 
         function renderFilePreviews() {
@@ -942,10 +970,20 @@ if (file.type.startsWith('image/')) {
             container.classList.remove('hidden');
             let html = '';
             attachedFiles.forEach((f, idx) => {
-                html += `<div class="relative bg-slate-900 border border-slate-700 rounded-xl p-1.5 flex items-center gap-2 text-xs text-slate-300">
-                    <span class="truncate max-w-[120px]">${escapeHtml(f.name)}</span>
-                    <button type="button" onclick="removeFile(${idx})" class="text-rose-400 font-bold ml-1">×</button>
-                </div>`;
+                if (f.type === "image" && f.dataUrl) {
+                    html += `<div class="relative bg-slate-900 border border-slate-700 rounded-xl p-1.5 flex items-center gap-2 text-xs text-slate-300">
+                        <img src="${f.dataUrl}" alt="${escapeHtml(f.name)}" class="w-10 h-10 object-cover rounded-lg border border-slate-700">
+                        <span class="truncate max-w-[120px]">${escapeHtml(f.name)}</span>
+                        <button type="button" onclick="removeFile(${idx})" class="text-rose-400 font-bold ml-1">×</button>
+                    </div>`;
+                } else {
+                    const label = (f.name || "").toLowerCase().endsWith(".pdf") ? "PDF" : "FILE";
+                    html += `<div class="relative bg-slate-900 border border-slate-700 rounded-xl p-1.5 flex items-center gap-2 text-xs text-slate-300">
+                        <span class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-semibold">${label}</span>
+                        <span class="truncate max-w-[120px]">${escapeHtml(f.name)}</span>
+                        <button type="button" onclick="removeFile(${idx})" class="text-rose-400 font-bold ml-1">×</button>
+                    </div>`;
+                }
             });
             container.innerHTML = html;
         }
@@ -990,23 +1028,27 @@ const needsSearch = /\b(news|today|latest|current|recent|right now|this week|thi
         apiContent = `Finance mode: give general educational guidance, avoid personalized financial advice, and encourage checking official sources or a licensed professional. ${apiContent}`;
     }
 
-
-          let imageAttachments = [];
-if (attachedFiles.length > 0) {
-    let attSummary = "\n\n[Attachments:\n";
-    for (let f of attachedFiles) {
-        if (f.isImage) {
-            imageAttachments.push(f.content);
-            attSummary += `- ${f.name} (image attached)\n`;
-        } else {
-            attSummary += `- ${f.name}\n\`\`\`\n${f.content}\n\`\`\`\n`;
+    let imageAttachments = [];
+    if (attachedFiles.length > 0) {
+        const textParts = [];
+        for (let f of attachedFiles) {
+            if (f.type === "image" && f.dataUrl) {
+                imageAttachments.push(f.dataUrl);
+            } else if (f.type === "text" && typeof f.content === "string") {
+                // PDFs are extracted into the same text-attachment pipeline as other text files.
+                textParts.push(f.content.startsWith("--- Attached PDF:") ? f.content : `--- Attached File: ${f.name} ---\n${f.content}`);
+            }
         }
+        if (textParts.length) {
+            apiContent += "\n\n" + textParts.join("\n\n");
+        }
+        if (imageAttachments.length > 0) {
+            const names = attachedFiles.filter(f => f.type === "image").map(f => f.name).filter(Boolean);
+            displayHtml += `<div class="mt-2 text-[11px] text-slate-200">[Attached image${names.length > 1 ? "s" : ""}: ${escapeHtml(names.join(", ") || "image")}]</div>`;
+        }
+        attachedFiles = [];
+        renderFilePreviews();
     }
-    attSummary += "]";
-    apiContent += attSummary;
-    attachedFiles = [];
-    renderFilePreviews();
-}
             appendUserMessage(displayHtml);
 
             const targetLang = document.getElementById('targetLanguage').value;
@@ -1024,8 +1066,8 @@ if (attachedFiles.length > 0) {
     chatHistory.push({
         role: 'user',
         content: [
-            { type: 'text', text: apiContent },
-            ...imageAttachments.map(img => ({ type: 'image_url', image_url: { url: img } }))
+            { type: 'text', text: (query && query.trim()) ? apiContent : (apiContent || "Analyze this image.") },
+            ...imageAttachments.map(dataUrl => ({ type: 'image_url', image_url: { url: dataUrl } }))
         ]
     });
 } else {
