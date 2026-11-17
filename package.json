@@ -1,10 +1,12 @@
 {
-  "name": "app",
+  "name": "the-apex-ai",
   "version": "1.0.0",
-  "description": "Clean, responsive HTML5 and CSS3 web layouts and components. # Front-End Web Projects",
-  "main": "index.js",
+  "description": "Single-page AI assistant served by the apex-proxy Cloudflare Worker, backed by Workers AI.",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy"
   },
   "repository": {
     "type": "git",
@@ -13,13 +15,11 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
   "bugs": {
     "url": "https://github.com/iniakinpelu2020-oss/The-Apex-Ai/issues"
   },
   "homepage": "https://github.com/iniakinpelu2020-oss/The-Apex-Ai#readme",
   "dependencies": {
     "pdfjs-dist": "^6.5.438"
-  },
-  "private": true
+  }
 }
