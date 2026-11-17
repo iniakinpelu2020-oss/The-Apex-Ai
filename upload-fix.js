@@ -75,8 +75,21 @@
     return null;
   }
 
+  /* Decodes through a Blob URL rather than the raw data URL: Android hands
+     photos over with an empty MIME type, and a data URL labelled
+     application/octet-stream is refused by the image decoder. */
   function normalizeToJpeg(file) {
-    return readAsDataUrl(file).then(function (raw) {
+    var source;
+    var blobUrl = null;
+    try {
+      var blob = (String(file.type || "").indexOf("image/") === 0) ? file : new Blob([file], { type: "image/jpeg" });
+      blobUrl = URL.createObjectURL(blob);
+      source = blobUrl;
+    } catch (e) {
+      source = null;
+    }
+
+    return (source ? Promise.resolve(source) : readAsDataUrl(file)).then(function (raw) {
       return new Promise(function (resolve, reject) {
         var img = new Image();
         img.onload = function () {
@@ -90,12 +103,17 @@
             canvas.width = w;
             canvas.height = h;
             canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+            if (blobUrl) URL.revokeObjectURL(blobUrl);
             resolve(canvas.toDataURL("image/jpeg", 0.88));
           } catch (e) {
+            if (blobUrl) URL.revokeObjectURL(blobUrl);
             reject(e);
           }
         };
-        img.onerror = function () { reject(new Error("decode failed")); };
+        img.onerror = function () {
+          if (blobUrl) URL.revokeObjectURL(blobUrl);
+          reject(new Error("decode failed"));
+        };
         img.src = raw;
       });
     });
