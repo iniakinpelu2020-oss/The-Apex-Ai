@@ -1,6 +1,19 @@
-// Injects /upload-fix.js into HTML responses so the hardened upload handler
-// loads after the app's own scripts. Non-HTML responses pass through untouched.
+// Serves the app with two problems repaired at the edge:
+//   1. Leftover Git merge-conflict markers in index.html, which make the
+//      browser throw a SyntaxError and kill the whole app script.
+//   2. Injects /upload-fix.js so the hardened upload handler loads after the
+//      app's own scripts.
+// Both are no-ops once the source file no longer needs them.
 const FIX_TAG = '<script src="/upload-fix.js" defer></script>';
+
+// Keeps the first side of each conflict block and drops the markers plus the
+// other side. The blocks it currently meets have identical sides.
+function resolveConflicts(html) {
+  return html.replace(
+    /^<<<<<<<[^\n]*\n([\s\S]*?)^=======\n[\s\S]*?^>>>>>>>[^\n]*\n/gm,
+    "$1"
+  );
+}
 
 export async function onRequest(context) {
   const response = await context.next();
@@ -15,17 +28,17 @@ export async function onRequest(context) {
     return response;
   }
 
-  if (html.includes("/upload-fix.js") || !html.includes("</body>")) {
-    return new Response(html, { status: response.status, headers: response.headers });
-  }
+  const repaired = resolveConflicts(html);
+  const needsFix = !repaired.includes("/upload-fix.js") && repaired.includes("</body>");
+  const body = needsFix ? repaired.replace("</body>", FIX_TAG + "</body>") : repaired;
 
   const headers = new Headers(response.headers);
-  headers.delete("content-length");
-  headers.delete("etag");
-  headers.set("cache-control", "public, max-age=0, must-revalidate");
+  if (body !== html) {
+    headers.delete("content-length");
+    headers.delete("etag");
+    headers.set("cache-control", "public, max-age=0, must-revalidate");
+  }
 
-  return new Response(html.replace("</body>", FIX_TAG + "</body>"), {
-    status: response.status,
-    headers,
-  });
+  // Always a fresh Response: the original body has been read above.
+  return new Response(body, { status: response.status, headers });
 }
