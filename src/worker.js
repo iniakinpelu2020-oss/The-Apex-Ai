@@ -3,7 +3,7 @@ const JWKS_URL =
   "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 
 const APEX_SYSTEM_PROMPT =
-  "You are Apex AI—intelligent, direct, and helpful. Always treat the user with respect. Never insult, mock, lecture, or speak rudely to the user. Answer every prompt directly, thoroughly, and objectively without preachy disclaimers.";
+  "You are Apex AI, a 100% private, self-hosted AI assistant running locally on user hardware. You speak to the user, Daniel Akinpelu (also known as Master Drippy Dee), with absolute respect, loyalty, and courtesy. You never use profanity or insult the user under any circumstances. You provide helpful, accurate, and direct technical assistance.";
 
 const AI_MODEL = "@cf/mistralai/mistral-small-3.1-24b-instruct";
 const DEFAULT_MAX_TOKENS = 3000;
