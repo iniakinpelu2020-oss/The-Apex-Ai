@@ -119,6 +119,33 @@
     });
   }
 
+  /* The page loads pdf.js 4.x by a URL that 404s (4.x ships only .mjs), so
+     window.pdfjsLib never exists and every PDF failed. Load a UMD build that
+     actually exists, once, and point it at the matching worker. */
+  var PDFJS_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+
+  function ensurePdfjs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (window.__apexPdfjsLoad) return window.__apexPdfjsLoad;
+    window.__apexPdfjsLoad = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = PDFJS_BASE + "pdf.min.js";
+      s.onload = function () {
+        if (!window.pdfjsLib) {
+          reject(new Error("pdfjs did not initialise"));
+          return;
+        }
+        try {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_BASE + "pdf.worker.min.js";
+        } catch (e) {}
+        resolve(window.pdfjsLib);
+      };
+      s.onerror = function () { reject(new Error("pdfjs could not be loaded")); };
+      document.head.appendChild(s);
+    });
+    return window.__apexPdfjsLoad;
+  }
+
   async function detect(file) {
     var mime = String(file.type || "").toLowerCase();
     var name = String(file.name || "").toLowerCase();
@@ -154,6 +181,7 @@
 
       if (info.kind === "pdf") {
         try {
+          await ensurePdfjs();
           var text = await extractPdfText(file);
           var label = file.name || "document.pdf";
           attachedFiles.push({
@@ -163,7 +191,7 @@
           });
           renderFilePreviews();
         } catch (err) {
-          fail("PDF Error", "Could not read text from \"" + (file.name || "that PDF") + "\". A scanned PDF may have no text layer.");
+          fail("PDF Error", "Could not read text from \"" + (file.name || "that PDF") + "\". A scanned PDF may have no text layer, or the PDF reader could not be loaded.");
         }
         continue;
       }
