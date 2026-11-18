@@ -62,27 +62,37 @@
 </head>
 <body class="h-dvh flex overflow-hidden">
     <!-- Sign-in screen -->
-    <div id="loginGate" class="fixed inset-0 z-[90] bg-apexBg flex flex-col items-center justify-between px-6 py-10 overflow-y-auto">
-        <div class="flex items-center gap-2.5 mt-6">
+    <div id="loginGate" class="fixed inset-0 z-[90] bg-apexBg flex flex-col items-center justify-center px-5 py-10 overflow-y-auto">
+      <div class="w-full max-w-[420px] mx-auto flex flex-col gap-7">
+        <div class="flex flex-col items-center gap-3 text-center">
+        <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-cyan-500 to-pink-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
             </div>
             <span class="text-2xl font-bold bg-gradient-to-r from-violet-400 via-cyan-400 to-pink-400 bg-clip-text text-transparent">The Apex Ai⚡</span>
         </div>
-        <h1 class="text-3xl font-semibold text-white text-center leading-tight">Ask once.<br>Get the best answer.</h1>
-        <div id="gateForm" class="w-full max-w-sm space-y-4 hidden">
-            <button onclick="loginWithGoogle()" class="w-full py-3.5 bg-white text-slate-900 rounded-full text-sm font-semibold flex items-center justify-center gap-2.5 shadow-md hover:bg-slate-100 transition-colors">
+        <h1 class="text-[28px] sm:text-[32px] font-semibold text-white text-center leading-tight tracking-tight">Ask once.<br>Get the best answer.</h1>
+        <p class="text-sm text-slate-300 leading-relaxed max-w-[330px] mx-auto">A direct, professional assistant with web search, file reading and translation built in &mdash; no corporate fluff.</p>
+        </div>
+        <div id="gateForm" class="w-full rounded-2xl bg-apexPanel/70 border border-slate-800/80 p-5 sm:p-6 space-y-4 shadow-2xl shadow-black/40">
+            <button onclick="loginWithGoogle()" class="w-full py-3.5 bg-white text-slate-900 rounded-xl text-sm font-semibold flex items-center justify-center gap-2.5 shadow-lg shadow-black/30 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-apexBg transition-colors">
                 <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.1 8.9 5 12 5z"/><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/><path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-2.9z"/><path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5.3L1.6 15.9C3.5 19.7 7.4 23 12 23z"/></svg>
                 <span>Continue with Google</span>
             </button>
-            <div class="flex items-center gap-4">
-                <div class="flex-grow border-t border-slate-800"></div>
-                <span class="text-xs text-slate-500">OR</span>
-                <div class="flex-grow border-t border-slate-800"></div>
+            <p class="text-center text-[11px] text-slate-300">Free with your Google account</p>
+            <div class="pt-1 space-y-3 border-t border-slate-800/70">
+                <button type="button" onclick="toggleGateEmail()" id="gateEmailToggle" aria-expanded="false" aria-controls="gateEmailPanel" class="w-full pt-3 text-xs font-medium text-slate-200 hover:text-white flex items-center justify-center gap-1.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
+                    <span>Continue with email</span>
+                    <svg id="gateEmailChevron" class="w-3.5 h-3.5 text-slate-300 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div id="gateEmailPanel" class="space-y-2.5 hidden">
+                    <input id="gateEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@domain.com" onkeydown="if(event.key==='Enter'){gateContinue()}" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/40">
+                    <button onclick="gateContinue()" class="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-semibold transition-colors">Continue</button>
+                </div>
             </div>
-            <input id="gateEmail" type="email" placeholder="Enter your email" onkeydown="if(event.key==='Enter'){gateContinue()}" class="w-full bg-apexPanel border border-slate-700 rounded-xl px-4 py-3.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500">
-            <button onclick="gateContinue()" class="w-full py-3.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-semibold transition-colors">Continue with email</button>
         </div>
+        <p class="text-center text-[11px] text-slate-300">Secured by Firebase Auth &mdash; we never see your password.</p>
+      </div>
     </div>
     <script>
         function gateContinue() {
@@ -90,10 +100,16 @@
             if(emailVal) { document.getElementById('authEmailInput').value = emailVal; }
             openAuthModal();
         }
-        setTimeout(function () {
-            const gateForm = document.getElementById('gateForm');
-            if(gateForm) gateForm.classList.remove('hidden');
-        }, 2000);
+        // Email is the secondary path: it opens on demand instead of competing with Google.
+        function toggleGateEmail() {
+            const panel = document.getElementById('gateEmailPanel');
+            const toggle = document.getElementById('gateEmailToggle');
+            const chevron = document.getElementById('gateEmailChevron');
+            const open = !panel.classList.toggle('hidden');
+            toggle.setAttribute('aria-expanded', String(open));
+            chevron.classList.toggle('rotate-180', open);
+            if (open) document.getElementById('gateEmail').focus();
+        }
     </script>
 
     <!-- Mobile Header -->
@@ -104,7 +120,6 @@
             </div>
             <span class="font-bold text-xs tracking-wide bg-gradient-to-r from-violet-400 via-cyan-400 to-pink-400 bg-clip-text text-transparent">The Apex Ai⚡</span>
         </div>
-        <button onclick="openAuthModal()" class="ml-auto mr-2 px-3 py-1.5 text-[11px] rounded-xl text-slate-300 bg-slate-900 border border-slate-700/85">Account</button>
         <button onclick="toggleMobileSidebar()" class="p-2 rounded-xl text-slate-300 bg-slate-900 border border-slate-700/85">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
         </button>
@@ -201,7 +216,6 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                <button onclick="openAuthModal()" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl border border-slate-800 text-xs transition-colors">Account</button>
                 <button onclick="clearChat()" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl border border-slate-800 text-xs transition-colors">Clear Chat</button>
             </div>
         </div>
@@ -277,11 +291,11 @@
             <p id="authModalSubtitle" class="text-xs text-slate-300">Sign in or create your secure account:</p>
 
             <div class="space-y-2.5">
-                <button onclick="loginWithGoogle()" class="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs text-white font-semibold flex items-center justify-center gap-2 transition-all">
+                <button onclick="loginWithGoogle()" class="w-full py-3 px-4 bg-white hover:bg-slate-100 text-slate-900 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-black/25 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
                     <svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.1 8.9 5 12 5z"/><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/><path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-2.9z"/><path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5.3L1.6 15.9C3.5 19.7 7.4 23 12 23z"/></svg>
                     <span>Continue with Google</span>
                 </button>
-                <button onclick="loginWithApple()" class="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs text-white font-semibold flex items-center justify-center gap-2 transition-all">
+                <button onclick="loginWithApple()" class="w-full py-2.5 px-4 bg-transparent hover:bg-slate-900/60 border border-slate-700 rounded-xl text-xs text-slate-200 font-medium flex items-center justify-center gap-2 transition-colors">
                     <svg class="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.89 5.37c.58-.71 1.01-1.7.9-2.69-.92.04-2.03.62-2.68 1.33-.53.58-.99 1.56-.87 2.54 1.03.08 2.07-.51 2.65-1.18z"/></svg>
                     <span>Continue with Apple ID</span>
                 </button>
@@ -289,20 +303,20 @@
 
             <div class="relative flex py-1 items-center">
                 <div class="flex-grow border-t border-slate-800"></div>
-                <span class="flex-shrink mx-4 text-[10px] text-slate-500 uppercase tracking-widest">Or email</span>
+                <span class="flex-shrink mx-4 text-[11px] text-slate-300 uppercase tracking-widest">Or email</span>
                 <div class="flex-grow border-t border-slate-800"></div>
             </div>
 
             <form onsubmit="handleFirebaseEmailAuth(event)" class="space-y-3">
                 <div>
-                    <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Email Address</label>
-                    <input type="email" id="authEmailInput" required placeholder="you@domain.com" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500">
+                    <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">Email Address</label>
+                    <input type="email" id="authEmailInput" required placeholder="you@domain.com" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-violet-500">
                 </div>
                 <div>
-                    <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Password (6+ characters)</label>
-                    <input type="password" id="authPasswordInput" required minlength="6" placeholder="••••••••" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500">
+                    <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">Password (6+ characters)</label>
+                    <input type="password" id="authPasswordInput" required minlength="6" placeholder="••••••••" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-violet-500">
                 </div>
-                <button type="button" onclick="resetPassword()" class="text-[11px] text-violet-400 hover:text-violet-300">Forgot password?</button>
+                <button type="button" onclick="resetPassword()" class="text-[11px] text-violet-300 hover:text-violet-200">Forgot password?</button>
                 <div class="flex gap-2 pt-1">
                     <button type="submit" id="emailAuthSubmitBtn" class="flex-1 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-violet-600/30">Sign In</button>
                     <button type="button" onclick="toggleAuthMode()" id="emailAuthToggleBtn" class="py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold transition-all">Create Account</button>
