@@ -122,16 +122,19 @@
   }
 
   function renderChip() {
+    const row = document.getElementById('apexNameRow');
     const chip = document.getElementById('apexNameChip');
-    if (!chip) return;
+    const clear = document.getElementById('apexNameClear');
+    if (!row || !chip) return;
     if (profileName()) {
-      chip.classList.add('hidden');
+      row.classList.add('hidden');
       return;
     }
-    chip.classList.remove('hidden');
+    row.classList.remove('hidden');
     const name = readName();
     chip.textContent = name ? 'Apex calls you ' + name + ' \u00b7 change' : 'Tell Apex what to call you';
     chip.title = 'Saved on this device only, never on your account';
+    if (clear) clear.classList.toggle('hidden', !name);
   }
 
   function openNamePrompt() {
@@ -144,17 +147,42 @@
     if (next !== null && next !== undefined) saveName(next);
   }
 
+  function clearName() {
+    saveName('');
+  }
+
   function buildChip() {
-    if (document.getElementById('apexNameChip')) return;
+    if (document.getElementById('apexNameRow')) return;
     const anchor = document.getElementById('authUserName');
     const holder = anchor && anchor.parentElement;
     if (!holder || !holder.parentElement) return;
+
+    const row = document.createElement('div');
+    row.id = 'apexNameRow';
+    row.className = 'hidden w-full flex items-center gap-1';
+
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.id = 'apexNameChip';
-    chip.className = 'hidden w-full text-left text-[10px] text-slate-400 px-1 truncate hover:text-white transition';
+    chip.className = 'flex-1 min-w-0 text-left text-[10px] text-slate-400 px-1 truncate hover:text-white transition';
     chip.addEventListener('click', openNamePrompt);
-    holder.parentElement.insertBefore(chip, holder.nextSibling);
+
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.id = 'apexNameClear';
+    clear.className = 'hidden shrink-0 text-[10px] text-slate-500 hover:text-red-400 px-1 transition';
+    clear.title = 'Forget the name saved on this device';
+    clear.textContent = 'Clear';
+    clear.addEventListener('click', function (event) {
+      try {
+        if (event && event.stopPropagation) event.stopPropagation();
+      } catch (_) {}
+      clearName();
+    });
+
+    row.appendChild(chip);
+    row.appendChild(clear);
+    holder.parentElement.insertBefore(row, holder.nextSibling);
     renderChip();
     if (anchor) {
       new MutationObserver(renderChip).observe(anchor, { childList: true, characterData: true, subtree: true });
