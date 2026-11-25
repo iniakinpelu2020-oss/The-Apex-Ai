@@ -237,7 +237,7 @@
             <div class="max-w-4xl mx-auto pointer-events-auto">
                 <div id="filePreviewContainer" class="mb-2 hidden flex-wrap gap-2"></div>
 
-                <form id="chatForm" onsubmit="handleChatSubmit(event)" class="flex gap-3 items-end">
+                <form id="chatForm" onsubmit="return false;" class="flex gap-3 items-end">
                     <div class="flex-1 bg-apexPanel/95 backdrop-blur-md border-2 border-violet-500/60 hover:border-violet-500 rounded-2xl p-3.5 focus-within:border-cyan-400 transition-all shadow-2xl flex items-center gap-3">
                         <input type="file" id="deviceFileInput" onchange="handleFileSelected(event)" class="hidden" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.png,.jpg,.jpeg,.webp,.pdf,.txt,.js,.py,.html,.css,.json,.csv,.md">
 
@@ -245,13 +245,13 @@
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
                         </button>
 
-                        <textarea id="chatInput" rows="1" placeholder="💬 Ask anything with web search or auto-translation..." class="w-full bg-transparent text-sm text-slate-100 placeholder-slate-400 focus:outline-none resize-none max-h-32" oninput="autoResize(this)" onkeydown="handleKeyDown(event)"></textarea>
+                        <textarea id="chatInput" rows="1" placeholder="💬 Ask anything with web search or auto-translation..." class="w-full bg-transparent text-sm text-slate-100 placeholder-slate-400 focus:outline-none resize-none max-h-32" oninput="autoResize(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
 
                         <button type="button" id="micBtn" onclick="toggleSpeechRecognition()" class="p-2 text-slate-300 hover:text-violet-400 rounded-xl hover:bg-slate-900 transition-colors flex-shrink-0" title="Voice Dictation">
                             <svg id="micIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
                         </button>
                     </div>
-                    <button type="submit" class="px-6 py-4 bg-gradient-to-r from-violet-600 via-cyan-600 to-pink-600 hover:opacity-90 text-white rounded-2xl font-bold transition-all shadow-xl shadow-violet-600/30 text-xs flex items-center justify-center flex-shrink-0">
+                    <button type="button" id="sendBtn" onclick="sendMessage()" class="px-6 py-4 bg-gradient-to-r from-violet-600 via-cyan-600 to-pink-600 hover:opacity-90 text-white rounded-2xl font-bold transition-all shadow-xl shadow-violet-600/30 text-xs flex items-center justify-center flex-shrink-0">
                         <svg class="w-5 h-5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                     </button>
                 </form>
@@ -851,6 +851,17 @@ const USER_IDENTITY_PROMPT = {
                 const form = document.getElementById('chatForm');
                 if (form) form.addEventListener('submit', (ev) => { try { ev.preventDefault(); } catch (_) {} }, { capture: true });
             } catch (e) { console.error('Form guard init failed:', e); }
+            try {
+                const sendBtn = document.getElementById('sendBtn');
+                if (sendBtn) sendBtn.addEventListener('click', () => { sendMessage(); });
+                const chatInput = document.getElementById('chatInput');
+                if (chatInput) chatInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        sendMessage();
+                    }
+                });
+            } catch (e) { console.error('Send listeners init failed:', e); }
         });
 
         function toggleAuthMode() {
@@ -1089,102 +1100,33 @@ const USER_IDENTITY_PROMPT = {
             renderFilePreviews();
         }
 
-        window.handleChatSubmit = async function handleChatSubmit(e) {
-            try { if (e && typeof e.preventDefault === 'function') e.preventDefault(); } catch (_) {}
+        async function sendMessage() {
             if (isGenerating) return;
-            isGenerating = true;
-            try { await processChatSubmit(); }
-            catch (err) { console.error('Chat submit error:', err); try { showModal('Error', friendlyApiError(err)); } catch (_) {} }
-            finally { isGenerating = false; }
-        }
 
-        async function processChatSubmit() {
-    const inputEl = document.getElementById('chatInput');
-    let query = (inputEl?.value || '').trim();
-    if (!query && attachedFiles.length === 0) return;
+            const inputEl = document.getElementById('chatInput');
+            const query = (inputEl?.value || '').trim();
+            if (!query && attachedFiles.length === 0) return;
 
-    // If auth hasn't resolved yet or user is signed out, preserve draft and prompt login.
-    const signedIn = !!(window.currentUser && !window.currentUser.isAnonymous);
-    if (!window.authReady || !signedIn) {
-        window.pendingChatDraft = { query, attachedFiles: Array.isArray(attachedFiles) ? attachedFiles.slice() : [] };
-        try { if (typeof window.setGateState === 'function') window.setGateState(window.authReady ? 'login' : 'loading'); } catch (_) {}
-        try { showModal('Sign in required', 'Your message is saved. Sign in to send it automatically.'); } catch (_) {}
-        return;
-    }
-
-    inputEl.value = '';
-    inputEl.style.height = 'auto';
-
-    const recentHistory = chatHistory.slice(-6);
-    const sentiment = detectSentiment(query);
-    const domain = detectDomain(query);
-    const nlpContext = buildNLPContextEnhancer(query, recentHistory);
-    const followUpSuggestion = buildFollowUpPrompt(query, sentiment, domain);
-
-   let displayHtml = escapeHtml(query);
-let apiContent = query;
-const needsSearch = /\b(news|today|latest|current|recent|right now|this week|this year|who is|what is the current|stock price|weather)\b/i.test(query);
-
-    apiContent = `${nlpContext}\n\n${followUpSuggestion}\n\nUser request:\n${apiContent}`;
-
-    if (domain === "health") {
-        apiContent = `Health consult mode: provide general information only, encourage professional medical advice when appropriate. ${apiContent}`;
-    } else if (domain === "legal") {
-        apiContent = `Legal info mode: provide general information only, avoid giving legal advice, and suggest consulting a qualified attorney when appropriate. ${apiContent}`;
-    } else if (domain === "finance") {
-        apiContent = `Finance mode: give general educational guidance, avoid personalized financial advice, and encourage checking official sources or a licensed professional. ${apiContent}`;
-    }
-
-    let imageAttachments = [];
-    if (attachedFiles.length > 0) {
-        const textParts = [];
-        for (let f of attachedFiles) {
-            if (f.type === "image" && f.dataUrl) {
-                imageAttachments.push(f.dataUrl);
-            } else if (f.type === "text" && typeof f.content === "string") {
-                // PDFs are extracted into the same text-attachment pipeline as other text files.
-                textParts.push(f.content.startsWith("--- Attached PDF:") ? f.content : `--- Attached File: ${f.name} ---\n${f.content}`);
+            // Preserve draft and prompt login if signed out / auth not ready.
+            const signedIn = !!(window.currentUser && !window.currentUser.isAnonymous);
+            if (!window.authReady || !signedIn) {
+                window.pendingChatDraft = { query, attachedFiles: Array.isArray(attachedFiles) ? attachedFiles.slice() : [] };
+                try { if (typeof window.setGateState === 'function') window.setGateState(window.authReady ? 'login' : 'loading'); } catch (_) {}
+                try { showModal('Sign in required', 'Your message is saved. Sign in to send it automatically.'); } catch (_) {}
+                return;
             }
-        }
-        if (textParts.length) {
-            apiContent += "\n\n" + textParts.join("\n\n");
-        }
-        if (imageAttachments.length > 0) {
-            const names = attachedFiles.filter(f => f.type === "image").map(f => f.name).filter(Boolean);
-            displayHtml += `<div class="mt-2 text-[11px] text-slate-200">[Attached image${names.length > 1 ? "s" : ""}: ${escapeHtml(names.join(", ") || "image")}]</div>`;
-        }
-        attachedFiles = [];
-        renderFilePreviews();
-    }
+
+            // 1) show the user's message on screen, 2) clear the input
+            const displayHtml = escapeHtml(query);
             appendUserMessage(displayHtml);
+            inputEl.value = '';
+            inputEl.style.height = 'auto';
 
-            const targetLang = document.getElementById('targetLanguage').value;
-            if (targetLang && targetLang !== 'en-US' && targetLang !== 'auto') { 
-                const langLabel = targetLang;
-                apiContent = `[Respond in ${langLabel}] ${apiContent}`; 
-            }
-
-            if (chatHistory.length === 0 || chatHistory[0].role !== 'system') { 
-                chatHistory.unshift(await getActiveSystemPromptWithMemory()); 
-            } else {
-                chatHistory[0] = await getActiveSystemPromptWithMemory();
-            }
-        if (imageAttachments.length > 0) {
-    chatHistory.push({
-        role: 'user',
-        content: [
-            { type: 'text', text: (query && query.trim()) ? apiContent : (apiContent || "Analyze this image.") },
-            ...imageAttachments.map(dataUrl => ({ type: 'image_url', image_url: { url: dataUrl } }))
-        ]
-    });
-} else {
-    chatHistory.push({ role: 'user', content: apiContent });
-}
             const container = document.getElementById('chatMessages');
             const aiMsgId = 'ai-msg-' + Date.now();
             const div = document.createElement('div');
             div.className = 'flex items-start gap-3.5';
-            const loadingText = ['Thinking...', 'One sec...', 'Cooking something up...', 'On it...'][Math.floor(Math.random()*4)];
+            const loadingText = ['Thinking...', 'One sec...', 'Cooking something up...', 'On it...'][Math.floor(Math.random() * 4)];
             div.innerHTML = `
                 <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 to-cyan-500 text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-md">AI</div>
                 <div id="${aiMsgId}" class="bg-apexPanel border border-slate-800 rounded-2xl p-5 text-xs text-slate-200 leading-relaxed max-w-[85%] shadow-xl space-y-2">
@@ -1193,20 +1135,71 @@ const needsSearch = /\b(news|today|latest|current|recent|right now|this week|thi
             `;
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
-
             const contentDiv = document.getElementById(aiMsgId);
-            let finalAnswer = "";
-            let fatalMsg = "";
-            const errorMsgs = [];
-            const epoch = chatEpoch;
 
+            isGenerating = true;
             try {
-                const user = window.firebaseAuth && window.firebaseAuth.currentUser;
-                if (!user) {
-                    chatHistory.pop();
-                    throw new Error("You must be signed in to send messages.");
+                // Build API content (preserve existing attachment/search/language behavior)
+                let apiContent = query;
+                const needsSearch = /\b(news|today|latest|current|recent|right now|this week|this year|who is|what is the current|stock price|weather)\b/i.test(query);
+                const recentHistory = chatHistory.slice(-6);
+                const sentiment = detectSentiment(query);
+                const domain = detectDomain(query);
+                const nlpContext = buildNLPContextEnhancer(query, recentHistory);
+                const followUpSuggestion = buildFollowUpPrompt(query, sentiment, domain);
+                apiContent = `${nlpContext}\n\n${followUpSuggestion}\n\nUser request:\n${apiContent}`;
+
+                if (domain === "health") {
+                    apiContent = `Health consult mode: provide general information only, encourage professional medical advice when appropriate. ${apiContent}`;
+                } else if (domain === "legal") {
+                    apiContent = `Legal info mode: provide general information only, avoid giving legal advice, and suggest consulting a qualified attorney when appropriate. ${apiContent}`;
+                } else if (domain === "finance") {
+                    apiContent = `Finance mode: give general educational guidance, avoid personalized financial advice, and encourage checking official sources or a licensed professional. ${apiContent}`;
                 }
 
+                let imageAttachments = [];
+                if (attachedFiles.length > 0) {
+                    const textParts = [];
+                    for (let f of attachedFiles) {
+                        if (f.type === "image" && f.dataUrl) {
+                            imageAttachments.push(f.dataUrl);
+                        } else if (f.type === "text" && typeof f.content === "string") {
+                            textParts.push(f.content.startsWith("--- Attached PDF:") ? f.content : `--- Attached File: ${f.name} ---\n${f.content}`);
+                        }
+                    }
+                    if (textParts.length) apiContent += "\n\n" + textParts.join("\n\n");
+                    attachedFiles = [];
+                    window.attachedFiles = attachedFiles;
+                    renderFilePreviews();
+                }
+
+                const targetLang = document.getElementById('targetLanguage').value;
+                if (targetLang && targetLang !== 'en-US' && targetLang !== 'auto') {
+                    apiContent = `[Respond in ${targetLang}] ${apiContent}`;
+                }
+
+                if (chatHistory.length === 0 || chatHistory[0].role !== 'system') {
+                    chatHistory.unshift(await getActiveSystemPromptWithMemory());
+                } else {
+                    chatHistory[0] = await getActiveSystemPromptWithMemory();
+                }
+
+                if (imageAttachments.length > 0) {
+                    chatHistory.push({
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: (query && query.trim()) ? apiContent : (apiContent || "Analyze this image.") },
+                            ...imageAttachments.map(dataUrl => ({ type: 'image_url', image_url: { url: dataUrl } }))
+                        ]
+                    });
+                } else {
+                    chatHistory.push({ role: 'user', content: apiContent });
+                }
+
+                let finalAnswer = "";
+                let fatalMsg = "";
+                const errorMsgs = [];
+                const epoch = chatEpoch;
                 let success = false;
                 for (const model of ENSEMBLE_MODELS) {
                     try {
@@ -1222,6 +1215,7 @@ const needsSearch = /\b(news|today|latest|current|recent|right now|this week|thi
                         if (!errorMsgs.includes(fm)) errorMsgs.push(fm);
                     }
                 }
+
                 if (epoch !== chatEpoch) return;
                 if (!success) {
                     chatHistory.pop();
@@ -1232,13 +1226,12 @@ const needsSearch = /\b(news|today|latest|current|recent|right now|this week|thi
                 const cleanStoredContent = apiContent.replace(/\[Respond in [^\]]+\]\s*/, '').split('User request:\n').pop();
                 chatHistory[chatHistory.length - 1] = { role: 'user', content: cleanStoredContent };
                 chatHistory.push({ role: 'assistant', content: finalAnswer });
-                
+
                 if (window.saveCloudSession) {
                     window.saveCloudSession(currentSessionId, query, chatHistory);
                 }
 
-                // Async Cross-Session Memory Summarization Trigger
-                if (chatHistory.length > 4 && window.firebaseAuth.currentUser) {
+                if (chatHistory.length > 4 && window.firebaseAuth?.currentUser) {
                     fetch(PROXY_URL + '/summarize', {
                         method: 'POST',
                         headers: { 'Authorization': 'Bearer ' + await window.firebaseAuth.currentUser.getIdToken(), 'Content-Type': 'application/json' },
@@ -1247,11 +1240,21 @@ const needsSearch = /\b(news|today|latest|current|recent|right now|this week|thi
                         if (d && d.summary) window.saveUserMemory(d.summary);
                     }).catch(() => {});
                 }
-
             } catch (err) {
-                contentDiv.innerHTML = `<span class="text-rose-400 font-semibold">Processing Error:</span> ${escapeHtml(err.message)}`;
+                // Show any error inside the chat
+                if (contentDiv) {
+                    contentDiv.innerHTML = `<span class="text-rose-400 font-semibold">Processing Error:</span> ${escapeHtml(err.message || String(err))}`;
+                }
+            } finally {
+                isGenerating = false;
             }
         }
+
+        window.sendMessage = sendMessage;
+        window.handleChatSubmit = async function handleChatSubmit(e) {
+            try { if (e && typeof e.preventDefault === 'function') e.preventDefault(); } catch (_) {}
+            return sendMessage();
+        };
 
         async function callModelAPI(model, messages, useWeb) {
             const user = window.firebaseAuth && window.firebaseAuth.currentUser;
