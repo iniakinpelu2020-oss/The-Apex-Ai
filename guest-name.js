@@ -1,5 +1,6 @@
-// Session-scoped name for guests and for accounts with no profile name.
-// Kept in sessionStorage so it lasts for the tab session and clears on close.
+// Name for guests and accounts without a profile name.
+// Saved in this browser only (localStorage), so it survives visits without ever
+// being stored on the user's account.
 (function () {
   const KEY = 'apex_display_name';
   const PROXY_PREFIX = 'https://apex-proxy.';
@@ -41,20 +42,75 @@
     return String(value || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
   }
 
-  function readName() {
+  // Device-local storage, falling back to session storage when blocked
+  // (private modes, embedded webviews).
+  function localStore() {
     try {
-      return cleanName(sessionStorage.getItem(KEY) || '');
+      if (window.localStorage) return window.localStorage;
+    } catch (_) {}
+    return null;
+  }
+
+  function sessionStore() {
+    try {
+      return window.sessionStorage;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function readRaw(store) {
+    try {
+      return store ? store.getItem(KEY) || '' : '';
     } catch (_) {
       return '';
     }
   }
 
+  function readName() {
+    const local = localStore();
+    let value = readRaw(local);
+    if (!value) {
+      // Carry over a name saved before this tab's session ends.
+      const early = sessionStore();
+      const legacy = readRaw(early);
+      if (legacy && local) {
+        try {
+          local.setItem(KEY, legacy);
+        } catch (_) {}
+        try {
+          early.removeItem(KEY);
+        } catch (_) {}
+        value = legacy;
+      } else if (legacy) {
+        value = legacy;
+      }
+    }
+    return cleanName(value);
+  }
+
   function saveName(value) {
     const name = cleanName(value);
+    const local = localStore();
+    const session = sessionStore();
     try {
-      if (name) sessionStorage.setItem(KEY, name);
-      else sessionStorage.removeItem(KEY);
-    } catch (_) {}
+      if (local) {
+        if (name) local.setItem(KEY, name);
+        else local.removeItem(KEY);
+        // The old session-only copy is no longer needed.
+        if (session) session.removeItem(KEY);
+      } else if (session) {
+        if (name) session.setItem(KEY, name);
+        else session.removeItem(KEY);
+      }
+    } catch (_) {
+      try {
+        if (session) {
+          if (name) session.setItem(KEY, name);
+          else session.removeItem(KEY);
+        }
+      } catch (_) {}
+    }
     renderChip();
     return name;
   }
@@ -75,13 +131,13 @@
     chip.classList.remove('hidden');
     const name = readName();
     chip.textContent = name ? 'Apex calls you ' + name + ' \u00b7 change' : 'Tell Apex what to call you';
-    chip.title = 'Saved for this browser session only';
+    chip.title = 'Saved on this device only, never on your account';
   }
 
   function openNamePrompt() {
     let next;
     try {
-      next = window.prompt('What should Apex call you this session?', readName());
+      next = window.prompt('What should Apex call you? Leave blank to clear.', readName());
     } catch (_) {
       next = null;
     }
@@ -105,7 +161,7 @@
     }
   }
 
-  // Send the session name whenever the app has none to send (guests, anonymous
+  // Send the saved name whenever the app has none to send (guests, anonymous
   // accounts, or profiles without a display name).
   const originalFetch = window.fetch;
   if (typeof originalFetch === 'function') {
