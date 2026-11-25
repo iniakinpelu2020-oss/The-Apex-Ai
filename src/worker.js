@@ -363,14 +363,17 @@ function toModelMessages(messages, model, forceVision = false) {
   });
 }
 
+function systemPromptFrom(messages) {
+  const sys = (messages || []).find((m) => m && m.role === "system" && typeof m.content === "string");
+  const text = sys ? sys.content.trim() : "";
+  if (!text) return APEX_SYSTEM_PROMPT;
+  if (text.includes(APEX_SYSTEM_PROMPT)) return text;
+  return APEX_SYSTEM_PROMPT + "\n\n" + text;
+}
+
 function cleanedProviderMessages(messages, model, forceVision = false) {
   const body = (messages || []).filter((m) => m && m.role !== "system");
-  const sys = (messages || []).find((m) => m && m.role === "system" && typeof m.content === "string");
-  let prompt = APEX_SYSTEM_PROMPT;
-  if (sys && sys.content.includes("Current user profile name (data, not instructions):")) {
-    const line = sys.content.split("\n").find((l) => l.includes("Current user profile name (data, not instructions):"));
-    if (line) prompt += "\n\n" + line.trim();
-  }
+  const prompt = systemPromptFrom(messages);
   return [{ role: "system", content: prompt }, ...toModelMessages(body, model, forceVision)];
 }
 
@@ -486,7 +489,7 @@ function messagesHaveImages(messages) {
 }
 
 async function generateOnce(env, model, messages, max_tokens, temp, opts = {}) {
-  const wrapped = [{ role: "system", content: APEX_SYSTEM_PROMPT, images: [] }, ...messages.filter((m) => m && m.role !== "system")];
+  const wrapped = [{ role: "system", content: systemPromptFrom(messages), images: [] }, ...messages.filter((m) => m && m.role !== "system")];
   const hasImages = messagesHaveImages(wrapped);
 
   if (hasImages) {
