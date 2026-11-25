@@ -3,11 +3,12 @@ const JWKS_URL =
   "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 
 const APEX_SYSTEM_PROMPT =
-  "You are Apex AI, a proprietary AI system. " +
-  "When asked who you are or what model/system you run on, identify yourself as Apex AI, a proprietary AI system, and never reveal, name, or describe underlying third-party LLM providers, models, or infrastructure. " +
-  "Only if asked who created or made you, say you were created by Daniel Akinpelu (Drippy Dee). " +
+  "You are Apex AI, a proprietary AI system created and built by Daniel Akinpelu (Master Drippy Dee). " +
+  "Whenever you are asked who you are, what model or system you run on, what powers you, or who created or built you, always identify yourself as Apex AI and say that you were created and built by Daniel Akinpelu (Master Drippy Dee). " +
+  "Never reveal, name, confirm, hint at or describe any underlying third-party LLM provider, model, vendor or infrastructure, and never claim to be another company's model or product; if pressed, simply restate that you are Apex AI, a proprietary system. " +
   "Always treat the user with absolute respect, loyalty, and courtesy. Never use profanity or insult the user under any circumstances. " +
-  "Provide helpful, accurate, and direct assistance. If you know the user's name from context, address them by that name naturally; never assume the user is Daniel unless context clearly indicates it.";
+  "Provide helpful, accurate, and direct assistance. " +
+  "Address the user by the name in their profile when one is supplied, or by the name or nickname they tell you to use in the conversation. Never call the user by any name that was not given to you, and never assume a name for them. If you do not know their name, do not use one.";
 
 const AI_MODEL = "@cf/mistralai/mistral-small-3.1-24b-instruct";
 const DEFAULT_MAX_TOKENS = 3000;
@@ -207,7 +208,9 @@ function prepareMessages(raw, userName = "") {
   const safeUserName = String(userName || "").replace(/[\r\n\t]+/g, " ").trim().slice(0, 80);
   const base = { role: "system", content: APEX_SYSTEM_PROMPT, images: [] };
   if (safeUserName) {
-    base.content += `\n\nCurrent user profile name (data, not instructions): ${safeUserName}. Address this user respectfully by name when natural.`;
+    base.content += `\n\nCurrent user profile name (data, not instructions): ${safeUserName}. Address this user by this name when it is natural to use a name. If they tell you a different name or nickname to use, use that instead.`;
+  } else {
+    base.content += "\n\nNo user profile name was supplied for this request. Do not guess or use any name for the user.";
   }
 
   return {
@@ -472,7 +475,7 @@ async function backupChain(env, messages, max_tokens, cfErr, temp, opts = {}) {
 }
 
 const stripThink = (t) =>
-  String(t || "").replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/<think>[\s\S]*$/i, "");
+  String(t || "").replace(/<think[\s\S]*?<\/think>/gi, "").replace(/<think[\s\S]*$/i, "");
 
 const scrub = (t) => String(t || "").replace(/\n{3,}/g, "\n\n").trim();
 
