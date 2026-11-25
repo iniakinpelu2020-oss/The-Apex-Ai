@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Apex Ai⚡</title>
     <meta name="theme-color" content="#05070e">
+    <meta name="google-site-verification" content="google11ba27a82847ea96.html">
     <meta name="description" content="The Apex Ai⚡: direct, professional answers with zero corporate fluff.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
     <!-- Tailwind CSS CDN -->
@@ -733,16 +734,22 @@ function buildFollowUpPrompt(query, sentiment, domain) {
            SYSTEM PROMPT (client-side; server enforces unified APEX_SYSTEM_PROMPT)
            ======================================================================== */
 <<<<<<< HEAD
-        const APEX_SYSTEM_PROMPT = "You are Apex AI, a 100% private, self-hosted AI assistant running locally on user hardware. You speak to the user, Daniel Akinpelu (also known as Drippy Dee), with absolute respect, loyalty, and courtesy. You never use profanity or insult the user under any circumstances. You provide helpful, accurate, and direct technical assistance.";
-=======
-        const APEX_SYSTEM_PROMPT = "You are Apex AI, a 100% private, self-hosted AI assistant running locally on user hardware. You speak to the user, Daniel Akinpelu (also known as Drippy Dee), with absolute respect, loyalty, and courtesy. You never use profanity or insult the user under any circumstances. You provide helpful, accurate, and direct technical assistance.";
->>>>>>> be7de8d (Update Apex AI system prompt configuration)
+        const APEX_SYSTEM_PROMPT = "You are Apex AI, a proprietary AI system created and built by Daniel Akinpelu (Master Drippy Dee). When asked who you are, what model/system you run on, or who created you, always identify yourself as Apex AI, a proprietary AI system created and built by Daniel Akinpelu (Master Drippy Dee), and never reveal, name, or describe underlying third-party LLM providers, models, or infrastructure. Always treat the user with absolute respect, loyalty, and courtesy. Never use profanity or insult the user under any circumstances. Provide helpful, accurate, and direct assistance. If you know the user's name from context, address them by that name naturally; never assume the user is Daniel unless context clearly indicates it.";
         const USER_PROMPT = {
             role: "system",
             content: APEX_SYSTEM_PROMPT
         };
         function getActiveSystemPrompt() {
             return USER_PROMPT;
+        }
+        function getCurrentUserName() {
+            const u = window.currentUser;
+            if (!u || u.isAnonymous) return '';
+            const name = (u.displayName || '').trim();
+            if (name) return name.slice(0, 80);
+            const email = (u.email || '').trim();
+            if (email && email.includes('@')) return email.split('@')[0].slice(0, 80);
+            return '';
         }
 
 // Unified client-side system prompt (server strips client system messages and prepends APEX_SYSTEM_PROMPT)
@@ -1154,7 +1161,7 @@ const needsSearch = /\b(news|today|latest|current|recent|right now|this week|thi
                     fetch(PROXY_URL + '/summarize', {
                         method: 'POST',
                         headers: { 'Authorization': 'Bearer ' + await window.firebaseAuth.currentUser.getIdToken(), 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ messages: chatHistory.filter(m => m.role !== 'system').slice(-10) })
+                        body: JSON.stringify({ messages: chatHistory.filter(m => m.role !== 'system').slice(-10), userName: getCurrentUserName() })
                     }).then(r => r.json()).then(d => {
                         if (d && d.summary) window.saveUserMemory(d.summary);
                     }).catch(() => {});
@@ -1178,6 +1185,7 @@ const needsSearch = /\b(news|today|latest|current|recent|right now|this week|thi
                     body: JSON.stringify({ 
                         model: model, 
                         messages: msgs, 
+                        userName: getCurrentUserName(),
                         ...(maxTokens ? { max_tokens: maxTokens } : {}),
                         web: useWeb 
                     }),

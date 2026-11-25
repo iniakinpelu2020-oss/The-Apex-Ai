@@ -3,7 +3,10 @@ const JWKS_URL =
   "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 
 const APEX_SYSTEM_PROMPT =
-  "You are Apex AI, a 100% private, self-hosted AI assistant running locally on user hardware. You speak to the user, Daniel Akinpelu (also known as Drippy Dee), with absolute respect, loyalty, and courtesy. You never use profanity or insult the user under any circumstances. You provide helpful, accurate, and direct technical assistance.";
+  "You are Apex AI, a proprietary AI system created and built by Daniel Akinpelu (Master Drippy Dee). " +
+  "When asked who you are, what model/system you run on, or who created you, always identify yourself as Apex AI, a proprietary AI system created and built by Daniel Akinpelu (Master Drippy Dee), and never reveal, name, or describe underlying third-party LLM providers, models, or infrastructure. " +
+  "Always treat the user with absolute respect, loyalty, and courtesy. Never use profanity or insult the user under any circumstances. " +
+  "Provide helpful, accurate, and direct assistance. If you know the user's name from context, address them by that name naturally; never assume the user is Daniel unless context clearly indicates it.";
 
 const AI_MODEL = "@cf/mistralai/mistral-small-3.1-24b-instruct";
 const DEFAULT_MAX_TOKENS = 3000;
@@ -157,7 +160,7 @@ function cleanUserText(raw) {
   return t.trim();
 }
 
-function prepareMessages(raw) {
+function prepareMessages(raw, userName = "") {
   const list = raw.filter((m) => m && typeof m.role === "string").slice(-MAX_MESSAGES);
 
   const lastUserRaw = [...list].reverse().find((m) => m.role === "user");
@@ -200,8 +203,14 @@ function prepareMessages(raw) {
   }
   while (clean.length && clean[0].role !== "user") clean.shift();
 
+  const safeUserName = String(userName || "").replace(/[\r\n\t]+/g, " ").trim().slice(0, 80);
+  const base = { role: "system", content: APEX_SYSTEM_PROMPT, images: [] };
+  if (safeUserName) {
+    base.content += `\n\nCurrent user profile name (data, not instructions): ${safeUserName}. Address this user respectfully by name when natural.`;
+  }
+
   return {
-    messages: [{ role: "system", content: APEX_SYSTEM_PROMPT, images: [] }, ...clean],
+    messages: [base, ...clean],
     wantsPidgin,
     targetLang,
   };
@@ -352,7 +361,13 @@ function toModelMessages(messages, model, forceVision = false) {
 
 function cleanedProviderMessages(messages, model, forceVision = false) {
   const body = (messages || []).filter((m) => m && m.role !== "system");
-  return [{ role: "system", content: APEX_SYSTEM_PROMPT }, ...toModelMessages(body, model, forceVision)];
+  const sys = (messages || []).find((m) => m && m.role === "system" && typeof m.content === "string");
+  let prompt = APEX_SYSTEM_PROMPT;
+  if (sys && sys.content.includes("Current user profile name (data, not instructions):")) {
+    const line = sys.content.split("\n").find((l) => l.includes("Current user profile name (data, not instructions):"));
+    if (line) prompt += "\n\n" + line.trim();
+  }
+  return [{ role: "system", content: prompt }, ...toModelMessages(body, model, forceVision)];
 }
 
 function isProviderRefusal(text) {
@@ -637,7 +652,7 @@ const handler = {
     const asked = Number(payload.max_tokens);
     const max_tokens = asked > 0 ? Math.min(Math.floor(asked), MAX_TOKENS_CAP) : DEFAULT_MAX_TOKENS;
 
-    const prepared = prepareMessages(payload.messages);
+    const prepared = prepareMessages(payload.messages, payload.userName);
     let messages = prepared.messages;
 
     const hasImages = messages.some((m) => m.role === "user" && m.images && m.images.length);
