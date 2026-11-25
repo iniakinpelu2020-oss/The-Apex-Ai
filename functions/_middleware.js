@@ -15,6 +15,12 @@ function resolveConflicts(html) {
   );
 }
 
+// A lone `<<<<<<< HEAD` with no closing markers is still a syntax error, so
+// drop any marker line that survived the block repair above.
+function dropLooseMarkers(html) {
+  return html.replace(/^(?:<<<<<<<|=======|>>>>>>>)[^\n]*\n/gm, "");
+}
+
 export async function onRequest(context) {
   const response = await context.next();
   const type = response.headers.get("Content-Type") || "";
@@ -28,7 +34,7 @@ export async function onRequest(context) {
     return response;
   }
 
-  const repaired = resolveConflicts(html);
+  const repaired = dropLooseMarkers(resolveConflicts(html));
   const needsFix = !repaired.includes("/upload-fix.js") && repaired.includes("</body>");
   const body = needsFix ? repaired.replace("</body>", FIX_TAG + "</body>") : repaired;
 
