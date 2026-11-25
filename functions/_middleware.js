@@ -1,10 +1,11 @@
-// Serves the app with two problems repaired at the edge:
+// Serves the app with a few fixes applied at the edge:
 //   1. Leftover Git merge-conflict markers in index.html, which make the
 //      browser throw a SyntaxError and kill the whole app script.
 //   2. Injects /upload-fix.js so the hardened upload handler loads after the
 //      app's own scripts.
+//   3. Injects /guest-name.js so guests can tell Apex what to call them.
 // Both are no-ops once the source file no longer needs them.
-const FIX_TAG = '<script src="/upload-fix.js" defer></script>';
+const EXTRA_SCRIPTS = ['/upload-fix.js', '/guest-name.js'];
 
 // Keeps the first side of each conflict block and drops the markers plus the
 // other side. The blocks it currently meets have identical sides.
@@ -15,10 +16,14 @@ function resolveConflicts(html) {
   );
 }
 
-// A lone `<<<<<<< HEAD` with no closing markers is still a syntax error, so
-// drop any marker line that survived the block repair above.
-function dropLooseMarkers(html) {
-  return html.replace(/^(?:<<<<<<<|=======|>>>>>>>)[^\n]*\n/gm, "");
+function injectScripts(html) {
+  if (!html.includes("</body>")) return html;
+  let out = html;
+  for (const src of EXTRA_SCRIPTS) {
+    if (out.includes(src)) continue;
+    out = out.replace("</body>", `<script src="${src}" defer></script></body>`);
+  }
+  return out;
 }
 
 export async function onRequest(context) {
@@ -34,9 +39,7 @@ export async function onRequest(context) {
     return response;
   }
 
-  const repaired = dropLooseMarkers(resolveConflicts(html));
-  const needsFix = !repaired.includes("/upload-fix.js") && repaired.includes("</body>");
-  const body = needsFix ? repaired.replace("</body>", FIX_TAG + "</body>") : repaired;
+  const body = injectScripts(resolveConflicts(html));
 
   const headers = new Headers(response.headers);
   if (body !== html) {
